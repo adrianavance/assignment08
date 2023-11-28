@@ -1,27 +1,83 @@
 ---
-title: "Assignment 8"
-author: "Adriana Vance"
-format: html
-editor: visual
+title: "Data Science for Public Policy"
+subtitle: "Assignment XX"
+author: "Name - NetID"
+execute:
+  warning: false
+format:
+  html:
+    embed-resources: true
 ---
 
-## Quarto
-
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
-
 ```{r}
-1 + 1
+library(tidyverse)
+library(dplyr)
+library(tidymodels)
+library(patchwork)
+
 ```
 
-You can add options to executable code like this
+
+# Exercise 01
 
 ```{r}
-#| echo: false
-2 * 2
+votes <- read_csv("votes_time_series.csv")
+
+# Replace NA values with 0
+
+votes <- votes %>%
+  replace(is.na(.), 0)
+
+# Save votes for session 103
+votes_103 <- votes %>%
+  filter(session == 103)
+
+# Create a recipe to run principal component analysis
+
+votes_pca_rec <- recipe( ~ ., data = votes_103) %>%
+  step_pca(all_numeric_predictors(), id = "pca", num_comp = 5) 
+  
+
+# calculate pct variance explained by components
+
+votes_pca_rec %>%
+prep() %>%
+tidy(id = "pca", type = "variance") %>%
+filter(terms == "variance") %>%
+mutate(pct_var = value/sum(value)) %>%
+slice_head(n = 5)
+
+# The first component explains about 95% of the variance and the second component explains about 2%. The next three explain less than 1% of the variance.
+
+votes_pcs <- votes_pca_rec %>%
+  prep() %>%
+  bake(new_data = votes_103)
+
+# Creating plots using the PCAs 
+
+party_point <- votes_pcs %>%
+  ggplot() +
+  geom_point(mapping = aes(x = PC1, y = PC2, color = party))
+
+# Appending votes dataset to include regions
+
+regions <- read_csv("states_regions.csv")
+
+# Visualize votes by political party
+votes_pcs <- left_join(votes_pcs, regions, join_by("state" == "State Code"))
+
+# Visualize votes by region
+region_point <- votes_pcs %>%
+  ggplot() + 
+  geom_point(mapping = aes(x = PC1, y = PC2, color = Region))
+
+party_point + region_point
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+# Exercise 02
+
+```{r}
+
+
+```
+
