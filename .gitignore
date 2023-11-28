@@ -1,3 +1,17 @@
+# Files in the directory
+
+executive-orders.csv
+
+votes_time_series.csv
+
+senate_bills_114.csv
+
+states_regions.csv
+
+assignment08.pdf
+
+template_html.qmd
+
 # History files
 .Rhistory
 .Rapp.history
