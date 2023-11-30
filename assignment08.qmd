@@ -20,6 +20,7 @@ library(igraph)
 library(ggplot2)
 library(ggraph)
 library(graphlayouts)
+library(Rfast)
 ```
 
 
@@ -121,7 +122,57 @@ metrics = cluster_metric_set(sse_within_total, silhouette_avg))
 res_metrics <- res %>%
 collect_metrics()
 
-is.na(votes_103)
+```
+
+
+```{r}
+# Creating the function to run for different numbers of clusters
+
+kmeans_pca_viz <- function(k, df){
+  
+kmeans_spec <- k_means(
+num_clusters = k) %>%
+set_engine("stats",
+nstart = 100) # number of random starts
+
+# create a workflow
+kmeans_wflow <- workflow(
+preprocessor = kmeans_rec,
+spec = kmeans_spec
+)
+
+# fit the model
+kmeans_mod <- kmeans_wflow %>%
+  fit(data = df)
+
+kmeans_votes <- bind_cols(
+  select(df, name, party),
+  select(votes_pcs, PC1, PC2),
+  cluster2 = kmeans_mod %>%
+    extract_cluster_assignment() %>%
+    pull(.cluster)
+)
+
+ggplot() + 
+  geom_point(
+    data = kmeans_votes,
+    mapping = aes(PC1, PC2, color = factor(cluster2)),
+    alpha = 0.5
+  ) +
+scale_color_manual(values = c("blue", "red")) +
+labs(
+title = "K-Means with K=2 and PCA",
+x = "PC1 (0.95 of Variation)",
+y = "PC2 (0.02 of Variation)"
+) +
+theme_minimal() +
+guides(text = NULL)
+# Produce a scatterplot with PC1 on the x-axis and PC2 on the y axis with clusters as the points 
+
+}
+
+print(kmeans_pca_viz(2, votes_103))
+
 ```
 # Exercise 03
 
@@ -169,30 +220,43 @@ geom_node_text(aes(label = name), vjust = 1, hjust = 1)
 
 bigram_president_count <- separate(exec_orders, bigram, c("word1", "word2"), sep = " ")
 
-# Count the appearance of each bigram-president pair
+# Filter out stopwords
 bigram_president_count <- bigram_president_count %>%
   anti_join(stop_words, by = c("word1" = "word")) %>%
   anti_join(stop_words, by = c("word2" = "word")) 
 
-# Then rejoin the column to calculate tf-idf 
-
+# Then rejoin the column to calculate number of bigram-president pairs and tf-idf 
 bigram_president_count <- unite(bigram_president_count, col = bigram, c("word1", "word2"), sep = " ")
 
 bigram_president_count <- bigram_president_count %>%    
 group_by(president, bigram) %>%
   summarise(appearances = n())
 
-
-
-# Create a document-term matrix (DTM) for TF-IDF calculation
-dtm <- bigram_counts %>%
-  cast_dtm(president, bigram, value = "appearances")
-
 # Calculate TF-IDF
-tfidf <- bind_tf_idf(bigram_counts, bigram, president, appearances)
+tf_idf <- bigram_president_count %>%
+  count(president, bigram, sort = TRUE) %>%
+  bind_tf_idf(term = bigram, document = president, n = n)
 
-# View the result
-print(tfidf)
+# plot TF-IDF
+tf_idf %>%
+group_by(president) %>%
+top_n(15, tf_idf) %>%
+ggplot(aes(tf_idf, bigram, fill = president)) +
+geom_col() +
+facet_wrap(~president, scales = "free") +
+theme_minimal() +
+guides(fill = "none")
+
+
+```
+
+# Exercise 04
+```{r}
+# Read csv
+bills <- read_csv("senate_bills_114.csv") %>%
+  mutate(passed = factor(passed, labels = c("1", "0"), levels = c("1", "0")))
+
+set.seed(20220414)
 
 
 ```
