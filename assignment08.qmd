@@ -14,7 +14,12 @@ library(tidyverse)
 library(dplyr)
 library(tidymodels)
 library(patchwork)
-
+library(tidyclust)
+library(tidytext)
+library(igraph)
+library(ggplot2)
+library(ggraph)
+library(graphlayouts)
 ```
 
 
@@ -77,7 +82,117 @@ party_point + region_point
 # Exercise 02
 
 ```{r}
+set.seed(20220412) 
 
+kmeans_rec <- recipe(
+formula = ~ .,
+data = votes_103
+) %>%
+step_select(all_numeric())
+
+# set up cross-validation
+votes_cv <- vfold_cv(votes_103, v = 5)
+
+kmeans_spec <- k_means(
+num_clusters = tune()) %>%
+set_engine("stats",
+nstart = 100) # number of random starts
+
+# create a workflow
+kmeans_wflow <- workflow(
+preprocessor = kmeans_rec,
+spec = kmeans_spec
+)
+# create tuning grid
+clust_num_grid <- grid_regular(
+num_clusters(),
+levels = 10
+)
+# see the tuning grid
+clust_num_grid
+
+res <- tune_cluster(
+kmeans_wflow,
+resamples = votes_cv,
+grid = clust_num_grid,
+control = control_grid(save_pred = TRUE, extract = identity),
+metrics = cluster_metric_set(sse_within_total, silhouette_avg))
+
+res_metrics <- res %>%
+collect_metrics()
+
+is.na(votes_103)
+```
+# Exercise 03
+
+```{r}
+executive_orders <- read_csv("executive-orders.csv")
+
+exec_orders <- executive_orders[!(is.na(executive_orders$text)), ] # Omit NA rows
+
+exec_orders <- exec_orders %>%
+  unnest_tokens(bigram, text, token = "ngrams", n = 2) %>%
+  filter(!is.na(bigram))
+
+exec_orders_separated <- separate(exec_orders, bigram, c("word1", "word2"), sep = " ")
+
+stop_words <- stop_words 
+
+exec_orders_separated <- exec_orders_separated %>%
+  anti_join(stop_words, by = c("word1" = "word")) %>%
+  anti_join(stop_words, by = c("word2" = "word"))
+
+# Count the number of appearances of each bigram
+bigram_counts <- exec_orders_separated %>%
+  group_by(word1, word2) %>%
+  summarise(appearances = n())
+
+# Filter to rows with more than 150 appearances
+bigram_150 <- bigram_counts %>%
+  filter(appearances > 150)
+
+# plot the bigrams that exist more than 150 times
+bigram_graph <- bigram_150 %>%
+graph_from_data_frame()
+
+# plot the relationships (you may want to make the plot window bigger)
+set.seed(2017)
+ggraph(bigram_graph, layout = "fr") +
+geom_edge_link() +
+geom_node_point() +
+geom_node_text(aes(label = name), vjust = 1, hjust = 1)
 
 ```
 
+
+```{r}
+
+bigram_president_count <- separate(exec_orders, bigram, c("word1", "word2"), sep = " ")
+
+# Count the appearance of each bigram-president pair
+bigram_president_count <- bigram_president_count %>%
+  anti_join(stop_words, by = c("word1" = "word")) %>%
+  anti_join(stop_words, by = c("word2" = "word")) 
+
+# Then rejoin the column to calculate tf-idf 
+
+bigram_president_count <- unite(bigram_president_count, col = bigram, c("word1", "word2"), sep = " ")
+
+bigram_president_count <- bigram_president_count %>%    
+group_by(president, bigram) %>%
+  summarise(appearances = n())
+
+
+
+# Create a document-term matrix (DTM) for TF-IDF calculation
+dtm <- bigram_counts %>%
+  cast_dtm(president, bigram, value = "appearances")
+
+# Calculate TF-IDF
+tfidf <- bind_tf_idf(bigram_counts, bigram, president, appearances)
+
+# View the result
+print(tfidf)
+
+
+```
