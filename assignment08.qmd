@@ -254,9 +254,16 @@ guides(fill = "none")
 ```{r}
 # Read csv
 bills <- read_csv("senate_bills_114.csv") %>%
-  mutate(passed = factor(passed, labels = c("1", "0"), levels = c("1", "0")))
+mutate(passed = factor(passed, labels = c("1", "0"), levels = c("1", "0")))
 
 set.seed(20220414)
+
+split <- initial_split(data = bills, strata = "passed", prop = 0.8)
+
+grade_train <- training(x = split)
+grade_test <- testing(x = split)
+
+library(textrecipes)
 
 
 ```
