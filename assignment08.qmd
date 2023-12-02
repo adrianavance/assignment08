@@ -275,7 +275,6 @@ bills_rec <- recipe( ~ ., data = bills) %>%
   step_tokenfilter(description, max_tokens = 200) %>%
   step_tfidf(description)
 
-prep() and bake() your recipe on the training data to take a look at the words used for tf-idf (they will be the end of the column names). Are there any words that seem like domain-specific stopwords? Update step_stopwords() in your recipe to remove these stopwords using the custom_stopword_source argument and re-create your recipe.
 
 bills_obj <- bills_rec %>%
   prep() 
@@ -284,5 +283,15 @@ baked_training <- bills_obj %>%
   bake(new_data = bills_train)
 
 # domain-specific words: bill, congress, author, administration, act
+
+# Recreate recipe to filter out domain-specific stopwords
+
+bills_rec <- recipe( ~ ., data = bills) %>%
+  step_tokenize(description) %>%
+  step_stopwords(description, custom_stopword_source = c("bill", "congress", "author", "administration", "act")) %>%
+  step_stem(description) %>%
+  step_tokenfilter(description, max_tokens = 200) %>%
+  step_tfidf(description)
+
 ```
 
