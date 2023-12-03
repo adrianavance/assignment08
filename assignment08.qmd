@@ -264,7 +264,6 @@ bills_train <- training(x = split)
 bills_test <- testing(x = split)
 
 library(textrecipes)
-
 library(stopwords)
 
 # Creating a recipe to perform TF-IDF
@@ -286,12 +285,41 @@ baked_training <- bills_obj %>%
 
 # Recreate recipe to filter out domain-specific stopwords
 
-bills_rec <- recipe( ~ ., data = bills) %>%
+bills_rec_domain <- recipe(passed ~ description, data = bills) %>%
   step_tokenize(description) %>%
   step_stopwords(description, custom_stopword_source = c("bill", "congress", "author", "administration", "act")) %>%
   step_stem(description) %>%
   step_tokenfilter(description, max_tokens = 200) %>%
-  step_tfidf(description)
+  step_tfidf(description) 
+
+bills_log <- logistic_reg() %>%
+  set_engine("glm")
+
+bills_wf <- workflow(
+  preprocessor = bills_rec_domain) %>%
+  add_model(bills_log)
+
+# fit the model
+bills_mod <- 
+  bills_wf  %>%
+  fit(data = bills_train)
+
+predictions <- bind_cols(bills_test, 
+               predict(bills_mod, new_data = bills_test, type = "prob"),
+               predict(bills_mod, new_data = bills_test))
+               
+conf_mat(data = predictions, 
+         truth = passed,
+         estimate = .pred_class)
+
+# Calculate precision and accuracy and stuff
+
+roc_curve(data = predictions, passed, .pred_1) %>%
+  ggplot(aes(x = 1 - specificity, y = sensitivity)) + 
+  geom_path() +
+  geom_abline(lty = 3) +
+  coord_equal() + 
+  theme_bw()
 
 ```
 
